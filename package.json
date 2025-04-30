@@ -1,0 +1,43 @@
+{
+  "name": "ats-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon --watch src --ext ts --exec \"ts-node src/server.ts\"",
+    "start": "ts-node-dev --respawn src/server.ts"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-validator": "^7.2.1",
+    "google-auth-library": "^9.15.1",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.9.0",
+    "mongoose": "^7.8.6",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1",
+    "pdf-parse": "^1.1.1",
+    "textract": "^2.5.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/mongoose": "^5.11.97",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.17.32",
+    "@types/nodemailer": "^6.4.17",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/winston": "^2.4.4",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
