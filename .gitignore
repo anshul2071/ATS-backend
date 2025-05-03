@@ -16,3 +16,4 @@ docker-compose.override.yml
 .sass-cache/
 .cache-loader/
 .env
+.env
