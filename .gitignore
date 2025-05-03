@@ -1,0 +1,17 @@
+# Node dependencies
+node_modules/
+
+# Build output
+dist/
+dinfo
+
+# Editor backups
+*~ 
+*.swp
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+.sass-cache/
+.cache-loader/

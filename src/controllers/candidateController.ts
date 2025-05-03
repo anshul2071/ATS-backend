@@ -151,3 +151,26 @@ export const createOfferForCandidate = async (
     next(err)
   }
 }
+
+
+// Ats-backend/src/controllers/candidateController.ts
+
+export const deleteCandidate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const candidateId = req.params.id;
+
+    const deletedCandidate = await Candidate.findByIdAndDelete(candidateId);
+
+    if (!deletedCandidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+
+    res.status(200).json({ message: 'Candidate deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};

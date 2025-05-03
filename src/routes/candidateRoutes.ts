@@ -7,6 +7,7 @@ import {
   getCandidateById,
   updateCandidate,
   getOffersByCandidate,
+  deleteCandidate,
   createOfferForCandidate
 } from '../controllers/candidateController'
 
@@ -26,5 +27,6 @@ router.put('/:id', updateCandidate)
 
 router.get('/:id/offers', getOffersByCandidate)
 router.post('/:id/offers', createOfferForCandidate)
+router.delete('/:id', deleteCandidate);
 
 export default router
