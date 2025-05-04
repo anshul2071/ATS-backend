@@ -1,7 +1,5 @@
-// src/models/User.ts
-
 import mongoose, { Schema, Document, Model } from 'mongoose'
-import bcrypt                                from 'bcrypt'
+import bcrypt from 'bcrypt'
 
 export interface IUser {
   name: string
@@ -14,7 +12,6 @@ export interface IUser {
   comparePassword(pw: string): Promise<boolean>
 }
 
-// Extend Mongoose’s Model with our IUser methods
 export interface IUserModel extends Model<IUser & Document> {}
 
 const userSchema = new Schema<IUser & Document>(
@@ -33,12 +30,12 @@ const userSchema = new Schema<IUser & Document>(
     },
     password: {
       type: String,
-      select: false    // omit by default on queries
+      select: false
     },
     googleId: {
       type: String,
       unique: true,
-      sparse: true      // only enforce uniqueness if present
+      sparse: true
     },
     isVerified: {
       type: Boolean,
@@ -50,22 +47,17 @@ const userSchema = new Schema<IUser & Document>(
   }
 )
 
-// Hash password before saving, if it’s new or changed
 userSchema.pre<IUser & Document>('save', async function () {
   if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, 10)
   }
 })
 
-// Instance method for comparing a plain-text password to the hashed one
 userSchema.methods.comparePassword = async function (pw: string) {
-  if (!this.password) {
-    return false
-  }
+  if (!this.password) return false
   return bcrypt.compare(pw, this.password)
 }
 
-// Remove sensitive/internal fields when converting doc -> JSON
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
     delete ret.password
@@ -74,7 +66,4 @@ userSchema.set('toJSON', {
   }
 })
 
-export default mongoose.model<IUser & Document, IUserModel>(
-  'User',
-  userSchema
-)
+export default mongoose.model<IUser & Document, IUserModel>('User', userSchema)
