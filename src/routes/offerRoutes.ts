@@ -1,12 +1,21 @@
-// src/routes/offerRoutes.ts
 import { Router } from 'express'
 import { protect } from '../middleware/authMiddleware'
-import { createOffer, listOffers } from '../controllers/offerController'
+import {
+  createOffer,
+  listOffers,
+  getOfferById,
+  updateOffer,
+  deleteOffer,
+} from '../controllers/offerController'
 
-const router = Router({ mergeParams: true })
+const router = Router()
 
 router.use(protect)
-router.post('/', createOffer)
-router.get('/', listOffers)
+
+router.get('/',      listOffers)     // GET   /offers
+router.post('/',     createOffer)    // POST  /offers
+router.get('/:id',   getOfferById)   // GET   /offers/:id
+router.put('/:id',   updateOffer)    // PUT   /offers/:id
+router.delete('/:id', deleteOffer)   // DELETE/offers/:id
 
 export default router

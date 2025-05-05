@@ -1,29 +1,45 @@
+// src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import User, { IUserDocument } from '../models/User'
 
-interface JwtPayload {
-  userId: string
+declare global {
+  namespace Express {
+    interface Request {
+      user?: { id: string; email: string; name?: string }
+    }
+  }
 }
 
-export const protect = (
-  req: Request & { userId?: string },
+export const protect = async (
+  req: Request,
   res: Response,
   next: NextFunction
-): void => {
+) => {
   const header = req.headers.authorization
-
-  if (!header || !header.startsWith('Bearer ')) {
-    res.status(401).json({ message: 'Unauthorized' })
-    return
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Not authorized, no token' })
   }
-
-  const token = header.split(' ')[1]
-
+  const token = header.slice(7)
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload
-    req.userId = payload.userId
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+      id?: string
+      userId?: string
+    }
+    const userId = decoded.id ?? decoded.userId
+    if (!userId) throw new Error('No user id in token')
+
+    const user = await User.findById(userId).select('-password')
+    if (!user) throw new Error('User not found')
+
+    req.user = {
+      id:    user._id.toString(),
+      email: user.email,
+      name:  (user as IUserDocument).name,
+    }
+
     next()
   } catch {
-    res.status(401).json({ message: 'Invalid token' })
+    return res.status(401).json({ message: 'Not authorized, token invalid' })
   }
 }

@@ -1,42 +1,40 @@
 // src/models/Interview.ts
 import { Schema, model, Document, Types } from 'mongoose'
+import { INTERVIEW_STAGES, InterviewStage } from '../constants/pipelineStages'
 
-export interface IInterview extends Document {
-  candidate:   Types.ObjectId
-  round:       string
-  interviewer: string
-  date:        Date
-  createdAt:   Date
-  updatedAt:   Date
-}
- export const PIPELINE_STAGES = [
-  'HR Screening',
-  'Technical Interview',
-  'Managerial Interview',
-
- ]
-
-export interface IInterview extends Document {
-  candidate:   Types.ObjectId
-  pipelineStage: typeof PIPELINE_STAGES[number]
-  interviewer: string
-  date:        Date
-  createdAt:   Date
-  updatedAt:   Date
+export interface IInterview {
+  candidate: Types.ObjectId | { name: string; email: string }
+  pipelineStage: InterviewStage
+  interviewerEmail: string
+  date: Date
+  meetLink: string
 }
 
+export interface IInterviewDocument extends IInterview, Document {}
 
-const interviewSchema = new Schema <IInterview>({
-  candidate: { type: Schema.Types.ObjectId, ref: 'Candidate', required: true },
-  pipelineStage: { type: String, enum: PIPELINE_STAGES, required: true },
-  interviewer: { type: String, required: true },
-  date: { type: Date, required: true },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}, {
-  timestamps: true,
-  versionKey: false
+const InterviewSchema = new Schema<IInterviewDocument>({
+  candidate: {
+    type: Schema.Types.ObjectId,
+    ref: 'Candidate',
+    required: true,
+  },
+  pipelineStage: {
+    type: String,
+    enum: INTERVIEW_STAGES,
+    required: true,
+  },
+  interviewerEmail: {
+    type: String,
+    required: true,
+  },
+  date: {
+    type: Date,
+    required: true,
+  },
+  meetLink: {
+    type: String,
+    required: true,
+  },
 })
 
-
-export default model<IInterview>('Interview', interviewSchema)
+export default model<IInterviewDocument>('Interview', InterviewSchema)

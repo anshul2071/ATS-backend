@@ -12,6 +12,16 @@ export interface IUser {
   comparePassword(pw: string): Promise<boolean>
 }
 
+export interface IUserDocument extends Document {
+  name: string
+  email: string
+  password?: string
+  googleId?: string
+  isVerified: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface IUserModel extends Model<IUser & Document> {}
 
 const userSchema = new Schema<IUser & Document>(
@@ -50,19 +60,6 @@ const userSchema = new Schema<IUser & Document>(
 userSchema.pre<IUser & Document>('save', async function () {
   if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, 10)
-  }
-})
-
-userSchema.methods.comparePassword = async function (pw: string) {
-  if (!this.password) return false
-  return bcrypt.compare(pw, this.password)
-}
-
-userSchema.set('toJSON', {
-  transform: (_doc, ret) => {
-    delete ret.password
-    delete ret.__v
-    return ret
   }
 })
 
