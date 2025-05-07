@@ -1,7 +1,6 @@
 // src/services/emailService.ts
 import nodemailer from "nodemailer";
 
-// pull in your .env values
 const host = process.env.EMAIL_HOST;
 const portEnv = process.env.EMAIL_PORT;
 const user = process.env.EMAIL_USER;
@@ -24,6 +23,13 @@ const transporter = nodemailer.createTransport({
   auth: { user, pass },
 });
 
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("✉️ SMTP configuration error:", err);
+  } else {
+    console.log("✔️ SMTP server is ready to take messages");
+  }
+});
 function formatDate(d: Date) {
   const date = d.toLocaleDateString();
   const time = d.toLocaleTimeString([], {
@@ -53,14 +59,14 @@ Good luck!
 `;
 
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to: interview.candidate.email,
     subject,
     text,
   });
 
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to: interview.interviewerEmail,
     subject,
     text,
@@ -85,14 +91,14 @@ See you then!
 `;
 
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to: interview.candidate.email,
     subject,
     text,
   });
 
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to: interview.interviewerEmail,
     subject,
     text,
@@ -100,32 +106,30 @@ See you then!
 }
 
 export interface OfferEmailPayload {
-  to: string;
-  subject: string;
-  templateName: string;                // e.g. "offerLetter"
-  variables: Record<string, string>;   // placeholder values
-  attachments?: { filename: string; path: string }[];
+  to: string
+  subject: string
+  templateName?: string
+  variables?: Record<string, string>
+  text?: string
+  attachments?: { filename: string; path: string }[]
 }
-
 export async function sendOfferEmail(payload: OfferEmailPayload) {
-  // for simplicity, we’ll do a plain-text fill-in
-  // In production you’d probably load a Handlebars/EJS template file
-  const { to, subject, variables, attachments } = payload;
-  let text = `Hello ${variables.name},\n\n`;
-  text += `We are pleased to offer you the position of ${variables.position}.\n`;
-  text += `Salary: ${variables.salary}\n`;
-  if (variables.validUntil) {
-    text += `Please respond by: ${variables.validUntil}\n`;
-  }
-  text += `\nRegards,\n${variables.recruiter}\n`;
-
+  const { to, subject, text, variables, attachments } = payload
+  const body =
+    text ??
+    `Hello ${variables!.name},\n\n` +
+      `We are pleased to offer you the position of ${variables!.position}.\n` +
+      `Salary: ${variables!.salary}\n` +
+      (variables!.validUntil ? `Please respond by: ${variables!.validUntil}\n` : "") +
+      `\nRegards,\n${variables!.recruiter}\n`
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to,
     subject,
-    text,
+    text: body,
     attachments,
-  });
+  })
 }
+
 
 export default transporter;

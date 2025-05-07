@@ -1,30 +1,39 @@
 // src/utils/email.ts
-import nodemailer from "nodemailer";
+import nodemailer from 'nodemailer'
+import dotenv from 'dotenv'
+dotenv.config()
 
-const transporter = nodemailer.createTransport({
-  host:     process.env.SMTP_HOST,
-  port:    +process.env.SMTP_PORT!,
-  secure:   true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const user = process.env.EMAIL_USER!
+const pass = process.env.EMAIL_PASS!
+if (!user || !pass) {
+  throw new Error('Missing EMAIL_USER or EMAIL_PASS in environment')
+}
 
-/**
- * Send a one-off email.
- */
-export async function sendEmail(opts: {
-  to:      string;
-  subject: string;
-  text?:   string;
-  html?:   string;
-}) {
+export interface MailOptions {
+  to: string
+  subject: string
+  text?: string
+  html?: string
+  attachments?: { filename: string; path: string }[]
+}
+
+export const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user, pass },
+})
+
+transporter.verify().then(
+  () => console.log('✔️ Gmail SMTP ready'),
+  err => console.error('❌ Gmail SMTP error:', err)
+)
+
+export async function sendEmail(opts: MailOptions) {
   await transporter.sendMail({
-    from:    `"${process.env.COMPANY_NAME || "ATS Pro"}" <no-reply@${process.env.SMTP_DOMAIN}>`,
-    to:       opts.to,
+    from: `"ATS Pro" <${user}>`,
+    to: opts.to,
     subject: opts.subject,
-    text:    opts.text,
-    html:    opts.html,
-  });
+    text: opts.text,
+    html: opts.html,
+    attachments: opts.attachments,
+  })
 }

@@ -1,77 +1,71 @@
-// src/controllers/offerController.ts
 import { Request, Response, NextFunction } from 'express'
-import Offer, { IOfferDocument } from '../models/Offer'
-import Candidate from '../models/Candidate'
-import { sendOfferEmail, OfferEmailPayload } from '../services/emailService'
+import Offer,           { IOfferDocument }     from '../models/Offer'
+import Candidate,       { ICandidateDocument } from '../models/Candidate'
+import OfferTemplate,   { IOfferTemplate }     from '../models/OfferTemplate'
+import { sendOfferEmail, OfferEmailPayload }                    from '../services/emailService'
+
+interface CreateOfferBody {
+  candidateId:  string
+  templateId:   string
+  placeholders: Record<string, any>
+}
+
+interface ExtendedOfferEmailPayload extends OfferEmailPayload {
+  text: string;
+}
 
 export async function createOffer(
-  req: Request,
+  req: Request<{}, IOfferDocument | { message: string }, CreateOfferBody>,
   res: Response<IOfferDocument | { message: string }>,
   next: NextFunction
 ) {
-  const {
-    candidateId,
-    position,
-    salary,
-    validUntil,
-    recruiterEmail,
-  } = req.body as {
-    candidateId: string
-    position: string
-    salary: number
-    validUntil?: string
-    recruiterEmail: string
-  }
+  const { candidateId, templateId, placeholders } = req.body
 
   try {
-    const candidate = await Candidate.findById(candidateId)
+    const candidate = await Candidate.findById(candidateId) as ICandidateDocument | null
     if (!candidate) {
       return res.status(404).json({ message: 'Candidate not found' })
     }
     if (candidate.status !== 'Hired') {
-      return res
-        .status(400)
-        .json({ message: 'Cannot send offer: candidate not yet hired.' })
+      return res.status(400).json({ message: 'Cannot send offer: candidate not yet hired.' })
+    }
+
+    const tpl = await OfferTemplate.findById(templateId).lean() as IOfferTemplate | null
+    if (!tpl) {
+      return res.status(404).json({ message: 'Template not found' })
     }
 
     const newOffer = await Offer.create({
-      candidate:     candidate._id,
-      position,
-      salary,
-      validUntil:    validUntil ? new Date(validUntil) : undefined,
-      recruiterEmail,
-      date:          new Date(),
+      candidate:    candidate._id,
+      template:     tpl._id,
+      placeholders,
+      date:         new Date(),
     })
 
     const populated = await Offer.findById(newOffer._id)
-      .populate<{ candidate: { name: string; email: string } }>(
-        'candidate',
-        'name email'
+      .populate<{ candidate: { name: string; email: string }; template: { subject: string; body: string } }>(
+        'candidate template',
+        'name email subject body'
       )
-      .lean()
+      .lean() as IOfferDocument & { candidate: { name: string; email: string }; template: { subject: string; body: string } }
 
-    if (!populated) {
-      return res
-        .status(500)
-        .json({ message: 'Failed to load newly created offer.' })
+    // simple {{var}} replacement
+    let bodyText = tpl.body
+    const vars = { name: candidate.name, ...placeholders }
+    for (const [key, val] of Object.entries(vars)) {
+      bodyText = bodyText.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), String(val))
     }
 
-    const payload: OfferEmailPayload = {
-      to:           populated.candidate.email,
-      subject:      `Your Offer from ${process.env.COMPANY_NAME}`,
-      templateName: 'offerLetter',
-      variables: {
-        name:       populated.candidate.name,
-        position:   populated.position,
-        salary:     populated.salary.toString(),
-        validUntil: populated.validUntil?.toDateString() ?? '',
-        recruiter:  populated.recruiterEmail,
-      },
+    await sendOfferEmail({
+      to:       candidate.email,
+      subject:  tpl.subject,
+      templateName: '',   // not used since we supply `text`
+      variables: {},      // not used
       attachments: [],
-    }
+      text: bodyText     // pass the rendered body
+    })
 
-    await sendOfferEmail(payload)
-    return res.status(201).json(populated as IOfferDocument)
+    return res.status(201).json(populated)
   } catch (err) {
     next(err)
   }
@@ -85,9 +79,10 @@ export async function listOffers(
   try {
     const offers = await Offer.find()
       .populate('candidate', 'name email')
+      .populate('template', 'name subject')
       .sort({ date: -1 })
-      .lean()
-    return res.status(200).json(offers)
+      .lean<IOfferDocument[]>()
+    res.json(offers)
   } catch (err) {
     next(err)
   }
@@ -101,54 +96,45 @@ export async function getOfferById(
   try {
     const offer = await Offer.findById(req.params.id)
       .populate('candidate', 'name email')
-      .lean()
+      .populate('template', 'name subject')
+      .lean<IOfferDocument>()
     if (!offer) {
       return res.status(404).json({ message: 'Offer not found' })
     }
-    return res.status(200).json(offer)
+    res.json(offer)
   } catch (err) {
     next(err)
   }
 }
 
 export async function updateOffer(
-  req: Request<{ id: string }>,
+  req: Request<{ id: string }, IOfferDocument | { message: string }, Partial<CreateOfferBody>>,
   res: Response<IOfferDocument | { message: string }>,
   next: NextFunction
 ) {
-  const { position, salary, validUntil } = req.body as Partial<{
-    position: string
-    salary: number
-    validUntil: string
-  }>
-
-  if (
-    position === undefined &&
-    salary === undefined &&
-    validUntil === undefined
-  ) {
-    return res
-      .status(400)
-      .json({ message: 'At least one of position, salary, or validUntil is required' })
+  const { placeholders, templateId } = req.body
+  if (!placeholders && !templateId) {
+    return res.status(400).json({ message: 'At least one of templateId or placeholders is required' })
   }
 
   try {
+    const update: any = {}
+    if (templateId)     update.template     = templateId
+    if (placeholders)   update.placeholders = placeholders
+
     const updated = await Offer.findByIdAndUpdate(
       req.params.id,
-      {
-        ...(position    !== undefined && { position }),
-        ...(salary      !== undefined && { salary }),
-        ...(validUntil  !== undefined && { validUntil: new Date(validUntil) }),
-      },
+      update,
       { new: true }
     )
       .populate('candidate', 'name email')
-      .lean()
+      .populate('template',  'name subject')
+      .lean<IOfferDocument>()
 
     if (!updated) {
       return res.status(404).json({ message: 'Offer not found' })
     }
-    return res.status(200).json(updated)
+    res.json(updated)
   } catch (err) {
     next(err)
   }
@@ -160,11 +146,11 @@ export async function deleteOffer(
   next: NextFunction
 ) {
   try {
-    const deleted = await Offer.findByIdAndDelete(req.params.id)
+    const deleted = await Offer.findByIdAndDelete(req.params.id).exec()
     if (!deleted) {
       return res.status(404).json({ message: 'Offer not found' })
     }
-    return res.status(200).json({ message: 'Offer deleted successfully' })
+    res.json({ message: 'Offer deleted successfully' })
   } catch (err) {
     next(err)
   }

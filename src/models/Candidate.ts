@@ -1,29 +1,35 @@
-import { Schema, model, Document } from 'mongoose'
+// src/models/Candidate.ts
+import { Schema, model, Document, Types } from 'mongoose';
 
-export interface ICandidate extends Document {
-  name: string
-  email: string
-  phone?: string
-  references?: string
-  technology: string
-  level: string
-  salaryExpectation?: number
-  experience?: number
-  status: string
-  createdAt: Date
-  updatedAt: Date
+export interface ICandidateDocument extends Document {
+  name:              string;
+  email:             string;
+  phone?:            string;
+  references?:       string;
+  technology:        string;
+  level:             string;
+  salaryExpectation?:number;
+  experience?:       number;
+  status:            'Shortlisted'
+                    | 'First Interview'
+                    | 'Second Interview'
+                    | 'Hired'
+                    | 'Rejected'
+                    | 'Blacklisted';
+  createdAt:         Date;
+  updatedAt:         Date;
 }
 
-const candidateSchema = new Schema<ICandidate>(
+const candidateSchema = new Schema<ICandidateDocument>(
   {
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    phone: { type: String },
-    references: { type: String },
-    technology: { type: String, required: true },
-    level: { type: String, required: true },
-    salaryExpectation: { type: Number },
-    experience: { type: Number },
+    name:            { type: String, required: true },
+    email:           { type: String, required: true, unique: true },
+    phone:           { type: String },
+    references:      { type: String },
+    technology:      { type: String, required: true },
+    level:           { type: String, required: true },
+    salaryExpectation:{ type: Number },
+    experience:      { type: Number },
     status: {
       type: String,
       enum: [
@@ -32,12 +38,12 @@ const candidateSchema = new Schema<ICandidate>(
         'Second Interview',
         'Hired',
         'Rejected',
-        'Blacklisted'
+        'Blacklisted',
       ],
-      default: 'Shortlisted'
-    }
+      default: 'Shortlisted',
+    },
   },
   { timestamps: true }
-)
+);
 
-export default model<ICandidate>('Candidate', candidateSchema)
+export default model<ICandidateDocument>('Candidate', candidateSchema);
