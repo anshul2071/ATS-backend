@@ -1,9 +1,8 @@
-// src/models/Interview.ts
 import { Schema, model, Document, Types } from 'mongoose'
 import { INTERVIEW_STAGES, InterviewStage } from '../constants/pipelineStages'
 
 export interface IInterview {
-  candidate: Types.ObjectId | { name: string; email: string }
+  candidate: Types.ObjectId
   pipelineStage: InterviewStage
   interviewerEmail: string
   date: Date
@@ -35,6 +34,15 @@ const InterviewSchema = new Schema<IInterviewDocument>({
     type: String,
     required: true,
   },
+}, {
+  timestamps: true,
+  toJSON: {
+    transform(doc, ret) {
+      ret.id = ret._id
+      delete ret._id
+      delete ret.__v
+    }
+  }
 })
 
 export default model<IInterviewDocument>('Interview', InterviewSchema)
