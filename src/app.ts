@@ -16,36 +16,28 @@ import errorHandler from './middleware/errorHandler'
 
 dotenv.config()
 
-const allowedOrigins = [
-  process.env.DEV_CLIENT_URL!,
-  process.env.FRONTEND_URL!
-]
-
-const corsOptions: cors.CorsOptions = {
-  origin: (incomingOrigin, callback) => {
-    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
-      return callback(null, true)
-    }
-    callback(new Error(`CORS policy block: ${incomingOrigin}`))
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}
-
 const app = express()
 
-app.use(cors(corsOptions))
+// CORS configuration
+const corsOrigin: string[] = [
+  process.env.DEV_CLIENT_URL! ,      
+  process.env.FRONTEND_URL!           
+]
+
+app.use(cors({
+  origin: corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-app.use((_, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
-  next()
-})
-
+// Static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads/resumes')))
 
+// Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/candidates', candidateRoutes)
 app.use('/api/interviews', interviewRoutes)
@@ -55,6 +47,7 @@ app.use('/api/sections', sectionRoutes)
 app.use('/api/stats', statsRoutes)
 app.use('/api/letters', letterRoutes)
 
+// Error handler
 app.use(errorHandler)
 
 export default app
