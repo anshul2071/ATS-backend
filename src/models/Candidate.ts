@@ -8,6 +8,7 @@ export interface ICandidateDocument extends Document {
   references?:        string;
   technology:         string;
   level:              string;
+  cvUrl?:             string;
   salaryExpectation?: number;
   experience?:        number;
   status:             'Shortlisted'
@@ -16,7 +17,7 @@ export interface ICandidateDocument extends Document {
                      | 'Hired'
                      | 'Rejected'
                      | 'Blacklisted';
-  // **New fields** for relational data:
+                     
   letters:            Types.ObjectId[];      
   assessments:        Types.ObjectId[];      
 
@@ -33,6 +34,7 @@ const candidateSchema = new Schema<ICandidateDocument>(
     technology:       { type: String, required: true },
     level:            { type: String, required: true },
     salaryExpectation:{ type: Number },
+    cvUrl:            { type: String},
     experience:       { type: Number },
     status: {
       type: String,
