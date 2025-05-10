@@ -1,3 +1,4 @@
+import dotenv from 'dotenv'
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
@@ -11,17 +12,28 @@ import sectionRoutes from './routes/sectionRoutes'
 import statsRoutes from './routes/statsRoutes'
 import letterRoutes from './routes/letterRoutes'
 
-
 import errorHandler from './middleware/errorHandler'
 
-const app = express()
+dotenv.config()
+
+const allowedOrigins = [
+  process.env.DEV_CLIENT_URL!,
+  process.env.FRONTEND_URL!
+]
 
 const corsOptions: cors.CorsOptions = {
-  origin: process.env.FRONTEND_URL,
+  origin: (incomingOrigin, callback) => {
+    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
+      return callback(null, true)
+    }
+    callback(new Error(`CORS policy block: ${incomingOrigin}`))
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
+  credentials: true
 }
+
+const app = express()
 
 app.use(cors(corsOptions))
 app.use(express.json())
@@ -42,7 +54,6 @@ app.use('/api/comments', commentRoutes)
 app.use('/api/sections', sectionRoutes)
 app.use('/api/stats', statsRoutes)
 app.use('/api/letters', letterRoutes)
-
 
 app.use(errorHandler)
 
