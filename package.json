@@ -1,14 +1,12 @@
 {
   "name": "ats-backend",
   "version": "1.0.0",
+  "description": "Backend API for the Application Tracking System",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
     "dev": "nodemon --watch src --ext ts --exec \"ts-node src/server.ts\"",
-<<<<<<< HEAD
     "start": "node dist/server.js"
-=======
-    "start": "node dist/server.js" 
->>>>>>> ebe2ebc0cc466283639f1065d861b6a21457a25b
   },
   "dependencies": {
     "axios": "^1.9.0",
