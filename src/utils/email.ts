@@ -29,7 +29,7 @@ transporter.verify().then(
 
 export async function sendEmail(opts: MailOptions) {
   await transporter.sendMail({
-    from: `"ATS Pro" <${user}>`,
+    from: `"NEXCRUIT" <${user}>`,
     to: opts.to,
     subject: opts.subject,
     text: opts.text,

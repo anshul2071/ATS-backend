@@ -1,19 +1,32 @@
 // src/controllers/candidateController.ts
-import { Request, Response, NextFunction } from 'express'
-import fs from 'fs'
-import Candidate, { ICandidateDocument } from '../models/Candidate'
-import { parseResume } from '../utils/resumeParser'
-import Offer, { IOfferDocument } from '../models/Offer'
-import OfferTemplate from '../models/OfferTemplate'
 
-import {
-  sendOfferEmail,
-  OfferEmailPayload
-} from '../services/emailService'
+import { Request, Response, NextFunction } from "express";
+import fs from "fs";
+import dayjs from "dayjs";
+import mongoose from "mongoose";
 
+import Candidate, { ICandidateDocument } from "../models/Candidate";
+import Assessment from "../models/Assessment";
+import Letter, { TemplateType } from "../models/Letter";
+import { parseResume } from "../utils/resumeParser";
+import { assessmentUpload } from "../middleware/uploadMiddleware";
+import { sendOfferEmail, OfferEmailPayload } from "../services/emailService";
 
+/**
+ * POST /api/candidates
+ * Create a new candidate (with CV upload & resume parsing).
+ */
 export const createCandidate = async (
-  req: Request,
+  req: Request<{}, {}, {
+    name: string;
+    email: string;
+    phone?: string;
+    references?: string;
+    technology: string;
+    level: string;
+    salaryExpectation?: number;
+    experience?: number;
+  }>,
   res: Response,
   next: NextFunction
 ) => {
@@ -26,20 +39,19 @@ export const createCandidate = async (
       technology,
       level,
       salaryExpectation,
-      experience
-    } = req.body
+      experience,
+    } = req.body;
 
     if (!req.file) {
-      return res.status(400).json({ message: 'File is required.' })
+      return res.status(400).json({ message: "CV file is required." });
     }
 
-    const filePath = req.file.path
+    const filePath = req.file.path;
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Uploaded file not found.' })
+      return res.status(404).json({ message: "Uploaded file not found." });
     }
 
-    // parseResume can return whatever shape your parserSummary needs
-    const parserSummary = await parseResume(filePath)
+    const parserSummary = await parseResume(filePath);
 
     const candidate = await Candidate.create({
       name,
@@ -49,67 +61,85 @@ export const createCandidate = async (
       technology,
       level,
       salaryExpectation,
-      experience
-    })
+      experience,
+    });
 
-    res
-      .status(201)
-      .json({ ...candidate.toObject(), parserSummary })
+    return res.status(201).json({ candidate, parserSummary });
   } catch (err) {
-    next(err)
+    console.error("🔥 createCandidate error:", err);
+    return next(err);
   }
-}
+};
 
 /**
  * GET /api/candidates
- * List candidates (with optional ?search=, ?tech=, ?status= filters)
+ * List all candidates, optionally filtered by ?search, ?tech, ?status
  */
 export const getCandidates = async (
-  req: Request,
+  req: Request<{}, {}, {}, {
+    search?: string;
+    tech?: string;
+    status?: string;
+  }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { search = '', tech = '', status = '' } = req.query as any
-    const filter: any = {}
+    const { search = "", tech = "", status = "" } = req.query;
+    const filter: any = {};
 
-    if (search) filter.name = { $regex: search, $options: 'i' }
-    if (tech)    filter.technology = tech
-    if (status)  filter.status     = status
+    if (search) filter.name = { $regex: search, $options: "i" };
+    if (tech)    filter.technology = tech;
+    if (status)  filter.status     = status;
 
-    const list = await Candidate.find(filter)
-    res.json(list)
+    const list = await Candidate.find(filter).sort({ createdAt: -1 });
+    return res.json(list);
   } catch (err) {
-    next(err)
+    console.error("🔥 getCandidates error:", err);
+    return next(err);
   }
-}
+};
 
 /**
  * GET /api/candidates/:id
- * Fetch one candidate by ID
+ * Fetch one candidate with populated letters & assessments
  */
 export const getCandidateById = async (
-  req: Request,
+  req: Request<{ id: string }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const candidate = await Candidate.findById(req.params.id)
+      .populate("letters")
+      .populate("assessments");
+
     if (!candidate) {
-      return res.status(404).json({ message: 'Candidate not found' })
+      return res.status(404).json({ message: "Candidate not found" });
     }
-    res.json(candidate)
+    return res.json(candidate);
   } catch (err) {
-    next(err)
+    console.error("🔥 getCandidateById error:", err);
+    return next(err);
   }
-}
+};
 
 /**
  * PUT /api/candidates/:id
- * Update arbitrary candidate fields
+ * Update candidate basic info
  */
 export const updateCandidate = async (
-  req: Request,
+  req: Request<{ id: string }, {}, Partial<{
+    name: string;
+    email: string;
+    phone: string;
+    references: string;
+    technology: string;
+    level: string;
+    salaryExpectation: number;
+    experience: number;
+    status: ICandidateDocument["status"];
+  }>>,
   res: Response,
   next: NextFunction
 ) => {
@@ -117,133 +147,236 @@ export const updateCandidate = async (
     const updated = await Candidate.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
-    )
+      { new: true, runValidators: true }
+    );
     if (!updated) {
-      return res.status(404).json({ message: 'Candidate not found' })
+      return res.status(404).json({ message: "Candidate not found" });
     }
-    res.json(updated)
+    return res.json(updated);
   } catch (err) {
-    next(err)
+    console.error("🔥 updateCandidate error:", err);
+    return next(err);
   }
-}
+};
 
 /**
- * GET /api/candidates/:id/offers
- * List all offers for a given candidate, populated with their name & email
+ * POST /api/candidates/:id/assessment
+ * Upload an assessment file, assign to candidate, return updated list
  */
-export const getOffersByCandidate = async (
-  req: Request,
+export const addAssessment = [
+  assessmentUpload.single("file"),
+  async (
+    req: Request<{ id: string }, {}, {
+      title: string;
+      score: string;       // comes in as string from InputNumber
+      remarks?: string;
+    }>,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { id } = req.params;
+      const cand = await Candidate.findById(id);
+      if (!cand) {
+        return res.status(404).json({ message: "Candidate not found" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "Assessment file is required" });
+      }
+
+      const assessment = await Assessment.create({
+        candidate: new mongoose.Types.ObjectId(id),
+        title:     req.body.title,
+        score:     Number(req.body.score),
+        remarks:   req.body.remarks,
+        fileUrl:   `/uploads/assessments/${req.file.filename}`,
+      });
+
+      cand.assessments.push(assessment._id);
+      await cand.save();
+
+      const updated = await Assessment.find({ candidate: id })
+        .sort({ createdAt: -1 });
+      return res.status(201).json(updated);
+    } catch (err) {
+      console.error("🔥 addAssessment error:", err);
+      return next(err);
+    }
+  },
+];
+
+/**
+ * POST /api/candidates/:id/background
+ * Send a background-check email to a reference
+ */
+export const sendBackgroundCheck = async (
+  req: Request<{ id: string }, {}, { refEmail: string }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const candidateId = req.params.id
-
-    // ensure the candidate exists
-    const cand = await Candidate.findById(candidateId).select('_id')
+    const { id } = req.params;
+    const cand = await Candidate.findById(id).select("name email");
     if (!cand) {
-      return res.status(404).json({ message: 'Candidate not found' })
+      return res.status(404).json({ message: "Candidate not found" });
+    }
+    if (!req.body.refEmail) {
+      return res.status(400).json({ message: "Reference email is required" });
     }
 
-    const offers = await Offer.find({ candidate: candidateId })
-      .populate<{ candidate: { name: string; email: string } }>(
-        'candidate',
-        'name email'
-      )
-      .sort({ date: -1 })
-      .lean()
+    const mail: OfferEmailPayload = {
+      to:       req.body.refEmail,
+      subject:  `Background Check Request for ${cand.name}`,
+      text:     `Hello,\n\nPlease provide a reference check for ${cand.name} (${cand.email}).\n\nThank you!`,
+    };
+    await sendOfferEmail(mail);
 
-    res.json(offers)
+    return res.json({ message: "Background check request sent." });
   } catch (err) {
-    next(err)
+    console.error("🔥 sendBackgroundCheck error:", err);
+    return next(err);
   }
-}
+};
 
-
-export const createOfferForCandidate = async (
-  req: Request,
+/**
+ * GET /api/candidates/:id/letters
+ * List all letters (offer/rejection) for a candidate
+ */
+export const getLettersByCandidate = async (
+  req: Request<{ id: string }, {}, {}, { type?: string }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const candidateId = req.params.id
-    const { templateId, placeholders } = req.body as {
-      templateId:  string
-      placeholders: Record<string,string>
+    const { id }    = req.params;
+    const { type }  = req.query;
+
+    const cand = await Candidate.findById(id).select("_id");
+    if (!cand) {
+      return res.status(404).json({ message: "Candidate not found" });
     }
 
-    // 1️⃣ fetch candidate
-    const candidate = await Candidate
-      .findById(candidateId)
-      .select('name email status') as ICandidateDocument | null
-
-    if (!candidate) {
-      return res.status(404).json({ message: 'Candidate not found' })
-    }
-    if (candidate.status !== 'Hired') {
-      return res.status(400).json({ message: 'Cannot send offer: candidate not yet hired.' })
+    const filter: any = { candidate: id };
+    if (type === "offer" || type === "rejection") {
+      filter.templateType = type;
     }
 
-    // 2️⃣ fetch template
-    const tpl = await OfferTemplate.findById(templateId)
-    if (!tpl) {
-      return res.status(404).json({ message: 'Offer template not found' })
-    }
-
-    // 3️⃣ create the offer
-    const newOffer = await Offer.create({
-      candidate:      candidate._id,
-      template:       tpl._id,
-      placeholders,
-      recruiterEmail: (req as any).user?.email ?? 'recruiter@company.com',
-      date:           new Date(),
-    })
-
-    // 4️⃣ populate candidate & template for email + response
-    const populated = await Offer.findById(newOffer._id)
-      .populate<{ candidate: { name:string; email:string } }>('candidate','name email')
-      .populate<{ template:  { name:string; subject:string } }>('template','name subject')
-      .lean<IOfferDocument & {
-        candidate: { name:string; email:string }
-        template:  { name:string; subject:string }
-      }>()
-
-    // 5️⃣ send the email
-    const payload: OfferEmailPayload = {
-      to:           populated!.candidate.email,
-      subject:      populated!.template.subject,
-      templateName: populated!.template.name,
-      variables:    populated!.placeholders as Record<string,string>,
-    }
-    await sendOfferEmail(payload)
-
-    // 6️⃣ return full list of offers for this candidate
-    const offers = await Offer.find({ candidate: candidateId })
-      .populate('candidate','name email')
-      .populate('template','name subject')
-      .sort({ date: -1 })
-      .lean()
-
-    return res.status(201).json(offers)
+    const letters = await Letter.find(filter).sort({ createdAt: -1 });
+    return res.json(letters);
   } catch (err) {
-    next(err)
+    console.error("🔥 getLettersByCandidate error:", err);
+    return next(err);
   }
-}
+};
 
+/**
+ * POST /api/candidates/:id/letters
+ * Create & send an offer or rejection letter
+ */
+export const createLetterForCandidate = async (
+  req: Request<{ id: string }, {}, {
+    templateType: TemplateType;
+    position: string;
+    technology: string;
+    startingDate: string;        // ISO string
+    salary: number;
+    probationDate: string;       // ISO string
+    acceptanceDeadline: string;  // ISO string
+  }>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const {
+      templateType,
+      position,
+      technology,
+      startingDate,
+      salary,
+      probationDate,
+      acceptanceDeadline,
+    } = req.body;
+
+    const cand = await Candidate.findById(id).select("name email status");
+    if (!cand) {
+      return res.status(404).json({ message: "Candidate not found" });
+    }
+    if (templateType === "offer" && cand.status !== "Hired") {
+      return res
+        .status(400)
+        .json({ message: "Cannot send offer: candidate not yet hired." });
+    }
+
+    // Build email
+    let subject: string, html: string;
+    if (templateType === "offer") {
+      subject = `🎉 Offer for ${cand.name}`;
+      html    = `
+        <p>Dear ${cand.name},</p>
+        <p>We are pleased to offer you the <strong>${position}</strong> role on our <strong>${technology}</strong> team.</p>
+        <ul>
+          <li><strong>Start Date:</strong> ${dayjs(startingDate).format("MMM D, YYYY")}</li>
+          <li><strong>Salary:</strong> $${salary.toLocaleString()}</li>
+          <li><strong>Probation Ends:</strong> ${dayjs(probationDate).format("MMM D, YYYY")}</li>
+          <li><strong>Accept By:</strong> ${dayjs(acceptanceDeadline).format("MMM D, YYYY")}</li>
+        </ul>
+        <p>Please reply by the deadline above to confirm.</p>
+      `;
+    } else {
+      subject = `🔔 Application Update for ${cand.name}`;
+      html    = `
+        <p>Dear ${cand.name},</p>
+        <p>Thank you for applying for the <strong>${position}</strong> role. After careful review, we will not be moving forward at this time.</p>
+      `;
+    }
+
+    // Send mail
+    await sendOfferEmail({ to: cand.email, subject, html });
+
+    // Persist Letter
+    const letter = await Letter.create({
+      candidate:          new mongoose.Types.ObjectId(id),
+      templateType,
+      position,
+      technology,
+      startingDate:       new Date(startingDate),
+      salary,
+      probationDate:      new Date(probationDate),
+      acceptanceDeadline: new Date(acceptanceDeadline),
+      sentTo:             cand.email,
+    });
+
+    // Link on candidate
+    cand.letters.push(letter._id);
+    await cand.save();
+
+    return res.status(201).json(letter);
+  } catch (err) {
+    console.error("🔥 createLetterForCandidate error:", err);
+    return next(err);
+  }
+};
+
+/**
+ * DELETE /api/candidates/:id
+ * Delete a candidate (and optionally cascade delete assessments & letters)
+ */
 export const deleteCandidate = async (
-  req: Request,
+  req: Request<{ id: string }>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const candidateId = req.params.id
-    const deleted = await Candidate.findByIdAndDelete(candidateId)
+    const deleted = await Candidate.findByIdAndDelete(req.params.id);
     if (!deleted) {
-      return res.status(404).json({ message: 'Candidate not found' })
+      return res.status(404).json({ message: "Candidate not found" });
     }
-    res.json({ message: 'Candidate deleted successfully' })
+    // Optionally: await Assessment.deleteMany({ candidate: req.params.id });
+    // Optionally: await Letter.deleteMany({ candidate: req.params.id });
+    return res.json({ message: "Candidate deleted successfully" });
   } catch (err) {
-    next(err)
+    console.error("🔥 deleteCandidate error:", err);
+    return next(err);
   }
-}
+};

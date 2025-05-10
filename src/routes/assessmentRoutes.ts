@@ -1,18 +1,17 @@
-import { Router } from 'express'
-import { protect } from '../middleware/authMiddleware'
-import { resumeUpload } from '../middleware/uploadMiddleware'
-import { addAssessment } from '../controllers/assessmentController'
+import { Router } from 'express';
+import {
+  createAssessment,
+  getAssessments,
+  getAssessment,
+} from '../controllers/assessmentController';
 
-const router = Router()
+const router = Router();
 
+router.post('/candidates/:candidateId/assessment', createAssessment);
+router.get('/candidates/:candidateId/assessment', getAssessments);
+router.get(
+  '/candidates/:candidateId/assessment/:assessmentId',
+  getAssessment
+);
 
-
-router.use(protect)
-router.post(
-  '/:id/assessment',
-
-  resumeUpload.single('file'),
-  addAssessment
-)
-
-export default router
+export default router;

@@ -1,15 +1,29 @@
+// src/middleware/uploadMiddleware.ts
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 
-const dest = path.join(__dirname, '../../uploads/resumes')
+// Base upload directory
+const UPLOAD_DIR = path.join(__dirname, '../../uploads')
 
-// Ensure that the destination folder exists
-if (!fs.existsSync(dest)) {
-  fs.mkdirSync(dest, { recursive: true })
+// Ensure base upload directory exists
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 }
 
-// Optional: Define a file filter to allow only certain file types (PDF, DOC, DOCX, JPEG, PNG, GIF)
+// Resume uploads directory
+const resumeDir = path.join(UPLOAD_DIR, 'resumes')
+if (!fs.existsSync(resumeDir)) {
+  fs.mkdirSync(resumeDir, { recursive: true })
+}
+
+// Assessment uploads directory
+const assessmentDir = path.join(UPLOAD_DIR, 'assessments')
+if (!fs.existsSync(assessmentDir)) {
+  fs.mkdirSync(assessmentDir, { recursive: true })
+}
+
+// File filter for allowed file types
 const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedTypes = [
     'application/pdf',
@@ -19,6 +33,7 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
     'image/png',
     'image/gif'
   ]
+  
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true)
   } else {
@@ -26,18 +41,37 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
   }
 }
 
+// Generate a unique filename
+const generateFilename = (file: Express.Multer.File) => {
+  const ext = path.extname(file.originalname)
+  const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`
+  return uniqueSuffix + ext
+}
+
+// Resume upload middleware
 export const resumeUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
-      cb(null, dest)
+      cb(null, resumeDir)
     },
     filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname)
-      // Use a unique name to avoid collisions: timestamp combined with a random number
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`
-      cb(null, uniqueSuffix + ext)
+      cb(null, generateFilename(file))
     }
   }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // limit file size to 10 MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  fileFilter
+})
+
+// Assessment upload middleware
+export const assessmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, assessmentDir)
+    },
+    filename: (_req, file, cb) => {
+      cb(null, generateFilename(file))
+    }
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
   fileFilter
 })

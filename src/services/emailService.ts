@@ -1,4 +1,5 @@
 // src/services/emailService.ts
+
 import nodemailer from "nodemailer";
 
 const host = process.env.EMAIL_HOST;
@@ -6,20 +7,18 @@ const portEnv = process.env.EMAIL_PORT;
 const user = process.env.EMAIL_USER;
 const pass = process.env.EMAIL_PASS;
 
-if (!host || !portEnv) {
-  throw new Error("Missing EMAIL_HOST or EMAIL_PORT in environment");
-}
-if (!user || !pass) {
-  throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment");
+if (!host || !portEnv || !user || !pass) {
+  throw new Error(
+    "Missing one of EMAIL_HOST, EMAIL_PORT, EMAIL_USER or EMAIL_PASS in environment"
+  );
 }
 
 const port = parseInt(portEnv, 10);
 
-// create one transporter for all your mails
 const transporter = nodemailer.createTransport({
   host,
   port,
-  secure: port === 465,     // SSL on 465, otherwise STARTTLS
+  secure: port === 465,
   auth: { user, pass },
 });
 
@@ -30,14 +29,49 @@ transporter.verify((err, success) => {
     console.log("✔️ SMTP server is ready to take messages");
   }
 });
+
+/** Simple “Jan 1, 2025 at 03:00 PM” formatter */
 function formatDate(d: Date) {
-  const date = d.toLocaleDateString();
-  const time = d.toLocaleTimeString([], {
+  const date = d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  const time = d.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
   });
   return `${date} at ${time}`;
 }
+
+export interface OfferEmailPayload {
+  to: string;
+  subject: string;
+  /** Plain‐text fallback */
+  text?: string;
+  /** HTML body (preferred) */
+  html?: string;
+  attachments?: { filename: string; path: string }[];
+}
+
+/**
+ * Sends a generic “offer” or “rejection” email.
+ * If `html` is provided, it will be used; otherwise `text`.
+ */
+export async function sendOfferEmail(payload: OfferEmailPayload) {
+  const { to, subject, text, html, attachments } = payload;
+
+  await transporter.sendMail({
+    from: `"NEXCRUIT" <${user}>`,
+    to,
+    subject,
+    text,
+    html,
+    attachments,
+  });
+}
+
+// (unchanged) Interview scheduling / reminder helpers...
 
 export async function sendInterviewScheduledEmail(interview: {
   candidate: { name: string; email: string };
@@ -104,32 +138,5 @@ See you then!
     text,
   });
 }
-
-export interface OfferEmailPayload {
-  to: string
-  subject: string
-  templateName?: string
-  variables?: Record<string, string>
-  text?: string
-  attachments?: { filename: string; path: string }[]
-}
-export async function sendOfferEmail(payload: OfferEmailPayload) {
-  const { to, subject, text, variables, attachments } = payload
-  const body =
-    text ??
-    `Hello ${variables!.name},\n\n` +
-      `We are pleased to offer you the position of ${variables!.position}.\n` +
-      `Salary: ${variables!.salary}\n` +
-      (variables!.validUntil ? `Please respond by: ${variables!.validUntil}\n` : "") +
-      `\nRegards,\n${variables!.recruiter}\n`
-  await transporter.sendMail({
-    from: `"NEXCRUIT" <${user}>`,
-    to,
-    subject,
-    text: body,
-    attachments,
-  })
-}
-
 
 export default transporter;
