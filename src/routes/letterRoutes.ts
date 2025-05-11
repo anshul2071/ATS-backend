@@ -1,14 +1,16 @@
-import { Router } from 'express';
+import { Router } from 'express'
 import {
+  createLetter,
   sendLetter,
   getLetters,
   getLetter,
-} from '../controllers/letterController';
+} from '../controllers/letterController'
 
-const router = Router();
+const router = Router({ mergeParams: true })
 
-router.post('/candidates/:candidateId/letters', sendLetter);
-router.get('/candidates/:candidateId/letters', getLetters);
-router.get('/candidates/:candidateId/letters/:letterId', getLetter);
+router.post('/',                createLetter)         // persist new letter
+router.post('/:letterId/send',  sendLetter)           // email an existing letter
+router.get('/',                 getLetters)           // list all
+router.get('/:letterId',        getLetter)            // fetch one
 
-export default router;
+export default router

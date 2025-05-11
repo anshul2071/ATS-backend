@@ -1,55 +1,97 @@
-import { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import Candidate from '../models/Candidate';
-import Assessment from '../models/Assessment';
-import { assessmentUpload } from '../middleware/uploadMiddleware';
+// src/controllers/assessmentController.ts
+import { Request, Response, NextFunction } from 'express'
+import mongoose from 'mongoose'
+import Candidate from '../models/Candidate'
+import Assessment from '../models/Assessment'
+import { assessmentUpload } from '../middleware/uploadMiddleware'
+import { sendOfferEmail, OfferEmailPayload } from '../services/emailService'
 
 export const createAssessment = [
   assessmentUpload.single('file'),
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { title, remarks, score } = req.body;
-      if (!req.file) return res.status(400).json({ message: 'File required' });
+      const { candidateId } = req.params
+      const { title, remarks, score } = req.body
 
-      const fileUrl = `/uploads/assessments/${req.file.filename}`;
-      const candidateId = req.params.candidateId;
+      if (!mongoose.isValidObjectId(candidateId)) {
+        return res.status(400).json({ message: 'Invalid candidate ID' })
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: 'Assessment file is required.' })
+      }
 
-      // 1️⃣ Persist Assessment
-      const a = await Assessment.create({
+      const fileUrl = `/uploads/assessments/${req.file.filename}`
+      const assessment = await Assessment.create({
         candidate: new mongoose.Types.ObjectId(candidateId),
         title,
         remarks,
         score: Number(score),
         fileUrl,
-      });
+      })
 
-      // 2️⃣ Link on Candidate
       await Candidate.findByIdAndUpdate(candidateId, {
-        $push: { assessments: a._id },
-      });
+        $push: { assessments: assessment._id },
+      })
 
-      // 3️⃣ Return updated list
-      const updated = await Candidate.findById(candidateId).populate('assessments');
-      return res.status(201).json(updated?.assessments);
+      const cand = await Candidate.findById(candidateId).select('name email')
+      if (cand) {
+        const mail: OfferEmailPayload = {
+          to: cand.email,
+          subject: `New Assessment Assigned: ${assessment.title}`,
+          html: `
+            <p>Hi ${cand.name},</p>
+            <p>We've assigned you a new assessment <strong>${assessment.title}</strong>.</p>
+            <ul>
+              <li><strong>Score Target:</strong> ${assessment.score}/100</li>
+              ${remarks ? `<li><strong>Notes:</strong> ${remarks}</li>` : ''}
+              <li><a href="${process.env.APP_URL}/assessments/${assessment._id}/download">Download Assessment</a></li>
+            </ul>
+            <p>Please complete it as soon as possible.</p>
+            <p>Good luck!<br/>Recruitment Team</p>
+          `,
+        }
+        await sendOfferEmail(mail)
+      }
+
+      const assessments = await Assessment.find({ candidate: candidateId }).sort({ createdAt: -1 })
+      return res.status(201).json(assessments)
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: 'Failed to add assessment' });
+      console.error('🔥 createAssessment error:', err)
+      return next(err)
     }
   },
-];
+]
 
-export const getAssessments = async (req: Request, res: Response) => {
-  const candidateId = req.params.candidateId;
-  const assessments = await Assessment.find({ candidate: candidateId }).sort({ createdAt: -1 });
-  return res.json(assessments);
-};
+export const getAssessments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { candidateId } = req.params
+    if (!mongoose.isValidObjectId(candidateId)) {
+      return res.status(400).json({ message: 'Invalid candidate ID' })
+    }
+    const assessments = await Assessment.find({ candidate: candidateId }).sort({ createdAt: -1 })
+    return res.json(assessments)
+  } catch (err) {
+    console.error('🔥 getAssessments error:', err)
+    return next(err)
+  }
+}
 
-export const getAssessment = async (req: Request, res: Response) => {
-  const { candidateId, assessmentId } = req.params;
-  const assessment = await Assessment.findOne({
-    _id: assessmentId,
-    candidate: candidateId,
-  });
-  if (!assessment) return res.status(404).json({ message: 'Not found' });
-  return res.json(assessment);
-};
+export const getAssessment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { candidateId, assessmentId } = req.params
+    if (!mongoose.isValidObjectId(candidateId) || !mongoose.isValidObjectId(assessmentId)) {
+      return res.status(400).json({ message: 'Invalid ID(s)' })
+    }
+    const assessment = await Assessment.findOne({
+      _id: assessmentId,
+      candidate: candidateId,
+    })
+    if (!assessment) {
+      return res.status(404).json({ message: 'Assessment not found' })
+    }
+    return res.json(assessment)
+  } catch (err) {
+    console.error('🔥 getAssessment error:', err)
+    return next(err)
+  }
+}

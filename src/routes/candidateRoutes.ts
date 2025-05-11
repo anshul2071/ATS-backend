@@ -1,38 +1,37 @@
-import { Router } from 'express';
-import { protect } from '../middleware/authMiddleware';
+// src/routes/candidateRoutes.ts
+
+import { Router } from "express"
+import { protect } from "../middleware/authMiddleware"
+import { resumeUpload, assessmentUpload } from "../middleware/uploadMiddleware"
 import {
   createCandidate,
   getCandidates,
   getCandidateById,
   updateCandidate,
   deleteCandidate,
-  addAssessment,
   sendBackgroundCheck,
   getLettersByCandidate,
   createLetterForCandidate,
-} from '../controllers/candidateController';
-import { resumeUpload } from '../middleware/uploadMiddleware';
+  createAssessmentForCandidate,
+  getAssessmentsForCandidate,
+} from "../controllers/candidateController"
 
-const router = Router();
+const router = Router()
 
-// all routes below require auth
-router.use(protect);
+router.use(protect)
 
-// — Candidate CRUD —
-router.post('/', resumeUpload.single('file'), createCandidate);
-router.get('/', getCandidates);
-router.get('/:id', getCandidateById);
-router.put('/:id', updateCandidate);
-router.delete('/:id', deleteCandidate);
+router.post("/", resumeUpload.single("file"), createCandidate)
+router.get("/", getCandidates)
+router.get("/:id", getCandidateById)
+router.put("/:id", updateCandidate)
+router.delete("/:id", deleteCandidate)
 
-// — Assessment assignment —
-router.post('/:id/assessment', addAssessment);
+router.post("/:id/assessments", assessmentUpload.single("file"), createAssessmentForCandidate)
+router.get("/:id/assessments", getAssessmentsForCandidate)
 
-// — Reference background check email —
-router.post('/:id/background', sendBackgroundCheck);
+router.post("/:id/background", sendBackgroundCheck)
 
-// — Offer / Rejection letters —
-router.get('/:id/letters', getLettersByCandidate);
-router.post('/:id/letters', createLetterForCandidate);
+router.get("/:id/letters", getLettersByCandidate)
+router.post("/:id/letters", createLetterForCandidate)
 
-export default router;
+export default router
