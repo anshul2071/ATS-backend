@@ -1,8 +1,6 @@
-// src/routes/candidateRoutes.ts
-
-import { Router } from "express"
-import { protect } from "../middleware/authMiddleware"
-import { resumeUpload, assessmentUpload } from "../middleware/uploadMiddleware"
+import { Router } from 'express'
+import { protect } from '../middleware/authMiddleware'
+import { resumeUpload, assessmentUpload } from '../middleware/uploadMiddleware'
 import {
   createCandidate,
   getCandidates,
@@ -14,24 +12,33 @@ import {
   createLetterForCandidate,
   createAssessmentForCandidate,
   getAssessmentsForCandidate,
-} from "../controllers/candidateController"
+} from '../controllers/candidateController'
 
 const router = Router()
 
 router.use(protect)
 
-router.post("/", resumeUpload.single("file"), createCandidate)
-router.get("/", getCandidates)
-router.get("/:id", getCandidateById)
-router.put("/:id", updateCandidate)
-router.delete("/:id", deleteCandidate)
+router
+  .route('/')
+  .post(resumeUpload, createCandidate)
+  .get(getCandidates)
 
-router.post("/:id/assessments", assessmentUpload.single("file"), createAssessmentForCandidate)
-router.get("/:id/assessments", getAssessmentsForCandidate)
+router
+  .route('/:id')
+  .get(getCandidateById)
+  .put(updateCandidate)
+  .delete(deleteCandidate)
 
-router.post("/:id/background", sendBackgroundCheck)
+router
+  .route('/:id/assessments')
+  .post(assessmentUpload, createAssessmentForCandidate)
+  .get(getAssessmentsForCandidate)
 
-router.get("/:id/letters", getLettersByCandidate)
-router.post("/:id/letters", createLetterForCandidate)
+router.post('/:id/background', sendBackgroundCheck)
+
+router
+  .route('/:id/letters')
+  .get(getLettersByCandidate)
+  .post(createLetterForCandidate)
 
 export default router

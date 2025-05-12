@@ -127,67 +127,65 @@ export const updateCandidate = async (
   }
 };
 
-// ─── REPLACE your old `addAssessment` & `getAssessments` exports with these ───
-
-export const createAssessmentForCandidate = [
-  assessmentUpload.single("file"),
-  async (
-    req: Request<
-      { id: string },
-      {},
-      { title: string; score: number; remarks?: string }
-    >,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const candidateId = req.params.id;
-      const { title, score, remarks } = req.body;
-      if (!mongoose.isValidObjectId(candidateId)) {
-        return res.status(400).json({ message: "Invalid candidate ID" });
-      }
-      const cand = await Candidate.findById(candidateId).select("name email assessments");
-      if (!cand) {
-        return res.status(404).json({ message: "Candidate not found" });
-      }
-      if (!req.file) {
-        return res.status(400).json({ message: "Assessment file is required." });
-      }
-
-      const fileUrl = `/uploads/assessments/${req.file.filename}`;
-      const assessment = await Assessment.create({
-        candidate: new mongoose.Types.ObjectId(candidateId),
-        title,
-        score: Number(score),
-        remarks,
-        fileUrl,
-      });
-
-      cand.assessments.push(assessment._id);
-      try { await cand.save(); }
-      catch (err) { console.error("Failed to link assessment:", err); }
-
-      await sendOfferEmail({
-        to: cand.email,
-        subject: `📝 New Assessment Assigned`,
-        html: `
-          <p>Hi ${cand.name},</p>
-          <p>We've assigned you a new assessment:</p>
-          <ul>
-            <li><strong>${assessment.title}</strong></li>
-            <li>Score: ${assessment.score}/100</li>
-          </ul>
-          <p>Please log into your portal to download it.</p>
-        `,
-      });
-
-      return res.status(201).json(assessment);
-    } catch (err) {
-      console.error("createAssessmentForCandidate error:", err);
-      return next(err);
+/**
+ * POST /api/candidates/:id/assessments
+ * (file field must be named “file” to match multer.single("file"))
+ */
+export const createAssessmentForCandidate = async (
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const candidateId = req.params.id
+    if (!mongoose.isValidObjectId(candidateId)) {
+      return res.status(400).json({ message: 'Invalid candidate ID' })
     }
-  },
-];
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Assessment file is required.' })
+    }
+
+    const cand = await Candidate.findById(candidateId).select('name email')
+    if (!cand) {
+      return res.status(404).json({ message: 'Candidate not found' })
+    }
+
+    const { title, score, remarks } = req.body
+    const fileUrl = `/uploads/assessments/${req.file.filename}`
+
+    const assessment = await Assessment.create({
+      candidate: new mongoose.Types.ObjectId(candidateId),
+      title,
+      score: Number(score),
+      remarks,
+      fileUrl,
+    })
+
+    cand.assessments.push(assessment._id)
+    await cand.save()
+
+    await sendOfferEmail({
+      to: cand.email,
+      subject: `📝 New Assessment Assigned: ${assessment.title}`,
+      html: `
+        <p>Hi ${cand.name},</p>
+        <p>We've just assigned you a new assessment:</p>
+        <ul>
+          <li><strong>${assessment.title}</strong></li>
+          <li>Target Score: ${assessment.score}/100</li>
+          <li><a href="${process.env.APP_URL}/candidates/${candidateId}/assessments/${assessment._id}/download">Download here</a></li>
+        </ul>
+        <p>Good luck!</p>
+      `,
+    } as OfferEmailPayload)
+
+    return res.status(201).json(assessment)
+  } catch (err) {
+    console.error('createAssessmentForCandidate error:', err)
+    return next(err)
+  }
+}
 
 export const getAssessmentsForCandidate = async (
   req: Request<{ id: string }>,
@@ -195,22 +193,18 @@ export const getAssessmentsForCandidate = async (
   next: NextFunction
 ) => {
   try {
-    const candidateId = req.params.id;
+    const candidateId = req.params.id
     if (!mongoose.isValidObjectId(candidateId)) {
-      return res.status(400).json({ message: "Invalid candidate ID" });
+      return res.status(400).json({ message: 'Invalid candidate ID' })
     }
-    if (!(await Candidate.exists({ _id: candidateId }))) {
-      return res.status(404).json({ message: "Candidate not found" });
-    }
-    const assessments = await Assessment.find({ candidate: candidateId }).sort({ createdAt: -1 });
-    return res.json(assessments);
+
+    const list = await Assessment.find({ candidate: candidateId }).sort({ createdAt: -1 })
+    return res.json(list)
   } catch (err) {
-    console.error("getAssessmentsForCandidate error:", err);
-    return next(err);
+    console.error('getAssessmentsForCandidate error:', err)
+    return next(err)
   }
-};
-
-
+}
 
 export const sendBackgroundCheck = async (
   req: Request<{ id: string }, {}, { refEmail?: string }>,
@@ -226,12 +220,11 @@ export const sendBackgroundCheck = async (
       return res.status(400).json({ message: "Reference email is required" });
     }
 
-    const mail: OfferEmailPayload = {
+    await sendOfferEmail({
       to: req.body.refEmail,
       subject: `Background Check Request for ${cand.name}`,
       text: `Hello,\n\nPlease provide a reference check for ${cand.name} (${cand.email}).\n\nThank you!`,
-    };
-    await sendOfferEmail(mail);
+    });
 
     return res.json({ message: "Background check request sent." });
   } catch (err) {
@@ -250,8 +243,7 @@ export const getLettersByCandidate = async (
 ) => {
   try {
     const { id } = req.params;
-    const exists = await Candidate.exists({ _id: id });
-    if (!exists) {
+    if (!(await Candidate.exists({ _id: id }))) {
       return res.status(404).json({ message: "Candidate not found" });
     }
 
@@ -295,7 +287,6 @@ export const createLetterForCandidate = async (
     }
     const { templateType, position, technology, startingDate, salary, probationDate, acceptanceDeadline } = req.body;
 
-    // only require offer fields when templateType === 'offer'
     if (templateType === "offer") {
       const missing: string[] = [];
       if (!position) missing.push("position");
@@ -337,10 +328,8 @@ export const createLetterForCandidate = async (
       `;
     }
 
-    // send email
     await sendOfferEmail({ to: cand.email, subject, html });
 
-    // create letter record
     const letter = await Letter.create({
       candidate: new mongoose.Types.ObjectId(req.params.id),
       templateType,
@@ -353,14 +342,8 @@ export const createLetterForCandidate = async (
       sentTo: cand.email,
     } as ILetter);
 
-    // push into candidate.letters
-    try {
-      cand.letters.push(letter._id);
-      await cand.save();
-    } catch (e) {
-      console.error("Error saving letter reference:", e);
-      // we can still return success since the letter itself exists
-    }
+    cand.letters.push(letter._id);
+    await cand.save().catch(e => console.error("Error saving letter ref:", e));
 
     return res.status(201).json(letter);
   } catch (err) {
